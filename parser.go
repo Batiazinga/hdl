@@ -210,6 +210,11 @@ func (p *parser) checkToken(t token, validTokens ...tokenType) bool {
 			break
 		}
 	}
+	// if not valid, add error to the generator
+	if !valid {
+		p.generator.unexpectedToken(t)
+	}
+
 	return valid
 }
 
@@ -262,7 +267,7 @@ func parseName(p *parser) stateParse {
 	// the CHIP token has already been consumed,
 	// so we expect the chip name now (or comments that we ignore)
 	tok := p.ignoreComments()
-	if !p.validToken(tok, tokenIdentifier) {
+	if !p.checkToken(tok, tokenIdentifier) {
 		return nil
 	}
 
@@ -270,7 +275,7 @@ func parseName(p *parser) stateParse {
 	name := tok.val
 	//check name formatting: name starts with an upper case letter
 	r1, _ := utf8.DecodeRuneInString(name)
-	if !unidcode.IsUpper(r1) {
+	if !unicode.IsUpper(r1) {
 		p.generator.warningf(p.currentFile, "chip name %q should start with an upper case letter", name)
 	}
 	// check consistency between chip and filename
@@ -296,11 +301,12 @@ func parseName(p *parser) stateParse {
 // parseChip parses the content of the chip (in, out, parts, clocked).
 func parseChip(p *parser) stateParse {
 	tok := p.ignoreComments()
-	if !p.validToken(tok, tokenIN, tokenOUT, tokenPARTS, tokenCLOCKED) {
+	if !p.checkToken(tok, tokenIN, tokenOUT, tokenPARTS, tokenCLOCKED) {
 		return nil
 	}
 
 	// token is valid
+	// consume it and go the right state
 	switch tok.typ {
 	case tokenIN:
 		return parseIn
@@ -317,41 +323,31 @@ func parseChip(p *parser) stateParse {
 
 // OLD CODE: START AGAIN
 func parseIn(p *parser) stateParse {
-	// read next token
-	tok := p.ignoreComments()
-	// check token: only IN token is valid
-	if !p.checkToken(tok, tokenIN) {
-		// this is an error
-		return nil
-	}
-	// just consume this token, i.e. do nothing with it
-
 	// parse list of in buses
 	success := parseBusList(p, p.currentChip.in)
+	// NO! Parse as much as possible and list as many errors as possible!
 	if !success {
 		return nil // error: stop here
 	}
-	return parseOut
+	return parseChip
 }
 
 // parseOut parses the output buses of the chip.
 func parseOut(p *parser) stateParse {
-	// read next token
-	tok := p.ignoreComments()
-	// check token: only IN token is valid
-	if !p.checkToken(tok, tokenOUT) {
-		// this is an error
-		return nil
-	}
-	// just consume this token, i.e. do nothing with it
-
 	// parse list of in buses
 	success := parseBusList(p, p.currentChip.out)
+	// NO! Parse as much as possible and list as many errors as possible!
 	if !success {
 		return nil // error: stop here
 	}
-	return parsePartsPreambule
+	return parseChip
 }
+
+func parseClocked(p *parser) stateParse {
+	return nil
+}
+
+// this code is bad
 
 // parseBusList parses a list of buses and writes them to the given map.
 // The first (non comment) token it receives must be an identifier.
@@ -365,7 +361,7 @@ func parseBusList(p *parser, buses map[string]int) bool {
 		return false // error: stop here
 	}
 
-	// read input buses
+	// read buses
 	// read tokens until an error occurs or a ';' is received
 	// errors are handled in the loop
 	for tok.typ != tokenSemiCol {
@@ -387,6 +383,7 @@ func parseBusList(p *parser, buses map[string]int) bool {
 		// check that bus has not been declared yet
 		if _, present := buses[name]; present {
 			p.generator.errort(tok, "bus %q redeclared", name)
+			return false // error: stop here
 		}
 		// perform some checks: emit a warning if the first character is upper case
 		r1, _ := utf8.DecodeRuneInString(name)
@@ -407,12 +404,13 @@ func parseBusList(p *parser, buses map[string]int) bool {
 			if !p.checkToken(tok, tokenNumber) {
 				return false // error: stop here
 			}
-			//ok, I've the size of the bus
+			//ok, I have the size of the bus
 			var err error
 			size, err = strconv.Atoi(tok.val)
 			if err != nil {
 				// this should never happen
 				p.generator.errorf(p.currentFile, "invalid size format %q", tok.val)
+				return false // error: stop here
 			}
 
 			// close bracket
