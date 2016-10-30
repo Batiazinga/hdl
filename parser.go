@@ -194,7 +194,8 @@ func (p *parser) parse(file string) {
 
 // checkToken checks that the token is an expected token
 // and if it is not an error token (an error token cannot be expected).
-// If everything is fine 'true' is returned.
+// If everything is fine 'true' is returned
+// and it is guaranteed that the given token belonds to list of valid tokens.
 // Otherwise it returns false and stores an error in the generator.
 func (p *parser) checkToken(t token, validTokens ...tokenType) bool {
 	// Is this an error?
@@ -240,7 +241,7 @@ func parseComment(p *parser) stateParse {
 	// read next token
 	tok := p.nextToken()
 	if !p.checkToken(tok, tokenCommentAPI, tokenDecl) {
-		return nil // stop here
+		return nil // fatal error for the moment: stop here
 	}
 
 	// token is valid
@@ -268,7 +269,7 @@ func parseName(p *parser) stateParse {
 	// so we expect the chip name now (or comments that we ignore)
 	tok := p.ignoreComments()
 	if !p.checkToken(tok, tokenIdentifier) {
-		return nil
+		return nil // fatal error for the moment: stop here
 	}
 
 	// token identifier containing the name of the chip
@@ -302,7 +303,7 @@ func parseName(p *parser) stateParse {
 func parseChip(p *parser) stateParse {
 	tok := p.ignoreComments()
 	if !p.checkToken(tok, tokenIN, tokenOUT, tokenPARTS, tokenCLOCKED) {
-		return nil
+		return nil // fatal error for the moment: stop here
 	}
 
 	// token is valid
@@ -322,139 +323,133 @@ func parseChip(p *parser) stateParse {
 }
 
 // OLD CODE: START AGAIN
+// parseIn parses an input bus.
+// It returns parseIn as long as there is an input bus left.
+// When all input buses have been parsed it returns parseChip.
 func parseIn(p *parser) stateParse {
-	// parse list of in buses
-	success := parseBusList(p, p.currentChip.in)
-	// NO! Parse as much as possible and list as many errors as possible!
-	if !success {
-		return nil // error: stop here
+	// parse input bus
+	switch parseBus(p, p.currentChip.in) {
+	case stop:
+		// fatal error: stop here
+		return nil
+	case goOn:
+		// there is an input bus left, parse it
+		return parseIn
+	default:
+		// done: all input buses have been parsed
+		return parseChip
 	}
-	return parseChip
 }
 
 // parseOut parses the output buses of the chip.
 func parseOut(p *parser) stateParse {
-	// parse list of in buses
-	success := parseBusList(p, p.currentChip.out)
-	// NO! Parse as much as possible and list as many errors as possible!
-	if !success {
-		return nil // error: stop here
+	// parse output bus
+	switch parseBus(p, p.currentChip.out) {
+	case stop:
+		// fatal error: stop here
+		return nil
+	case goOn:
+		// there is an output bus left, parse it
+		return parseOut
+	default:
+		// done: all input buses have been parsed
+		return parseChip
 	}
-	return parseChip
+
 }
 
 func parseClocked(p *parser) stateParse {
 	return nil
 }
 
-// this code is bad
+func parseParts(p *parser) stateParse {
+	return nil
+}
 
-// parseBusList parses a list of buses and writes them to the given map.
+// result of parsing a bus
+const (
+	done = iota
+	goOn
+	stop
+)
+
+// parseBus parses a bus and writes it to the given map.
 // The first (non comment) token it receives must be an identifier.
-// The last token it reads is the ';' token or an error.
+// It stops when it reads ',', ';' or an unexpected token.
 // This last token is consumed.
-// It returns 'true' in case of success, false otherwise.
-func parseBusList(p *parser, buses map[string]int) bool {
+// It returns
+//  - 'done' is all input buses have been parsed,
+//  - 'goOn' if there is an input bus left,
+//  - 'stop' if a fatal error occured.
+func parseBus(p *parser, buses map[string]int) int {
 	tok := p.ignoreComments()
 	// check token
 	if !p.checkToken(tok, tokenIdentifier) {
-		return false // error: stop here
+		return stop // fatal error: stop here
 	}
 
-	// read buses
-	// read tokens until an error occurs or a ';' is received
-	// errors are handled in the loop
-	for tok.typ != tokenSemiCol {
-		// here, only comma or identifier is expected
+	// read bus
 
-		// if token is a comma, consume it
-		if tok.typ == tokenComma {
-			// read next token
-			tok = p.ignoreComments()
-			// check token: expect an identifier (a pin/bus name)
-			if !p.checkToken(tok, tokenIdentifier) {
-				return false // error: stop here
-			}
-		}
-		// here, only identifier is expected
+	// we have the pin/bus name
+	name := tok.val
+	// check that bus has not been declared yet
+	if _, present := buses[name]; present {
+		p.generator.errort(tok, "bus %q redeclared", name)
+		// not a fatal error: continue
+	}
+	// perform some checks: emit a warning if the first character is upper case
+	r1, _ := utf8.DecodeRuneInString(name)
+	if unicode.IsUpper(r1) {
+		p.generator.warningf(p.currentFile, "pin or bus name %q should start with a lower case letter", name)
+	}
 
-		// we have the pin/bus name
-		name := tok.val
-		// check that bus has not been declared yet
-		if _, present := buses[name]; present {
-			p.generator.errort(tok, "bus %q redeclared", name)
-			return false // error: stop here
-		}
-		// perform some checks: emit a warning if the first character is upper case
-		r1, _ := utf8.DecodeRuneInString(name)
-		if unicode.IsUpper(r1) {
-			p.generator.warningf(p.currentFile, "pin or bus name %q should start with a lower case letter", name)
-		}
+	// what is the size of the bus? We need to read next token to know
+	size := 1 // default value
+	tok = p.ignoreComments()
+	if !p.checkToken(tok, tokenLeftIndex, tokenComma, tokenSemiCol) {
+		return stop // fatal error for the moment: stop here
+	}
 
-		// what is the size of the bus? We need to read next token to know
-		size := 1 // default value
+	if tok.typ == tokenLeftIndex {
+		// this is a bus, not a simple pin: read its size
 		tok = p.ignoreComments()
-		if !p.checkToken(tok, tokenLeftIndex, tokenComma, tokenSemiCol) {
-			return false // error: stop here
+		if !p.checkToken(tok, tokenNumber) {
+			return stop // fatal error: stop here
+		}
+		//ok, I have the size of the bus
+		var err error
+		size, err = strconv.Atoi(tok.val)
+		if err != nil {
+			// this should never happen
+			p.generator.errorf(p.currentFile, "invalid size format %q", tok.val)
+			return stop // error: stop here
 		}
 
-		if tok.typ == tokenLeftIndex {
-			// this is a bus, not a simple pin: read its size
-			tok = p.ignoreComments()
-			if !p.checkToken(tok, tokenNumber) {
-				return false // error: stop here
-			}
-			//ok, I have the size of the bus
-			var err error
-			size, err = strconv.Atoi(tok.val)
-			if err != nil {
-				// this should never happen
-				p.generator.errorf(p.currentFile, "invalid size format %q", tok.val)
-				return false // error: stop here
-			}
-
-			// close bracket
-			tok = p.ignoreComments()
-			if !p.checkToken(tok, tokenRightIndex) {
-				return false // error: stop here
-			}
-
-			// read next token
-			tok = p.ignoreComments()
-			if !p.checkToken(tok, tokenComma, tokenSemiCol) {
-				return false // error: stop here
-			}
+		// close bracket
+		tok = p.ignoreComments()
+		if !p.checkToken(tok, tokenRightIndex) {
+			return stop // error: stop here
 		}
 
 		// I know the bus name and its size
 		p.currentChip.in[name] = size
+
+		// read next token
+		tok = p.ignoreComments()
+		if !p.checkToken(tok, tokenComma, tokenSemiCol) {
+			return stop // error: stop here
+		}
 	}
 
-	return true // success
-}
-
-// parsePartsPreambule consumes the "PARTS:" tokens.
-func parsePartsPreambule(p *parser) stateParse {
-	// we expect a 'PARTS' token
-	// we just consume it
-	tok := p.ignoreComments()
-	if !p.checkToken(tok, tokenPARTS) {
-		// this is an error: stop here
-		return nil
+	// token is ',' or ';' now
+	switch tok.typ {
+	case tokenComma:
+		// continue reading input buses
+		return goOn
+	case tokenSemiCol:
+		// done reading buses
+		return done
 	}
-
-	// we expect a ':' token
-	// we just consume it
-	tok = p.ignoreComments()
-	if !p.checkToken(tok, tokenColumn) {
-		// this is an error: stop here
-		return nil
-	}
-
-	return parseParts
-}
-
-// parseParts parses the list of parts of the Chip.
-func parseParts(p *parser) stateParse {
-	return nil // TODO: fix this
+	// nothing else should happen
+	return stop
 }
