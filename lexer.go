@@ -8,10 +8,10 @@ import (
 )
 
 type token struct {
-	typ  tokenType
-	file string
-	line int
-	val  string
+	typ          tokenType
+	file         string
+	line, column int
+	val          string
 }
 
 func (t token) String() string {
@@ -116,9 +116,17 @@ func (l *lexer) lineNumber() int {
 	return 1 + strings.Count(l.input[:l.start], "\n")
 }
 
+// columnNumber computes the column number of the start position of the current token.
+func (l *lexer) columnNumber() int {
+	// find last '\n' before l.start
+	last := strings.LastIndex(l.input[:l.start], "\n")
+	// count number of runes up to l.start (included)
+	return 1 + utf8.RuneCountInString(l.input[last+1:l.start])
+}
+
 // emit sends the current token to the channel.
 func (l *lexer) emit(t tokenType) {
-	l.tokens <- token{t, l.file, l.lineNumber(), l.input[l.start:l.pos]}
+	l.tokens <- token{t, l.file, l.lineNumber(), l.columnNumber(), l.input[l.start:l.pos]}
 	l.start = l.pos
 }
 
@@ -132,7 +140,7 @@ func (l *lexer) acceptRun(valid string) {
 // errorf emits a token error
 // and return the nil (end) state.
 func (l *lexer) errorf(format string, args ...interface{}) stateLex {
-	l.tokens <- token{tokenError, l.file, l.start, fmt.Sprintf(format, args...)}
+	l.tokens <- token{tokenError, l.file, l.lineNumber(), l.columnNumber(), fmt.Sprintf(format, args...)}
 	return nil
 }
 
