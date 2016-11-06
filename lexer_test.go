@@ -2,6 +2,8 @@ package hdl
 
 import "testing"
 
+// test that tokens have the correct token type
+
 type typeTest struct {
 	label string
 	input string
@@ -163,5 +165,82 @@ func TestLex(t *testing.T) {
 				len(test.types),
 			)
 		}
+	}
+}
+
+// test that line and column number are correct
+
+type positionTest struct {
+	label     string
+	input     string
+	positions []struct{ line, column int }
+}
+
+func TestPosition(t *testing.T) {
+
+	tests := []positionTest{
+		{
+			"valid",
+			"CHIP And {\n\tIN a, b;\n\tOUT out;",
+			[]struct{ line, column int }{
+				{1, 1},
+				{1, 6},
+				{1, 10},
+				{2, 2},
+				{2, 5},
+				{2, 6},
+				{2, 8},
+				{2, 9},
+				{3, 2},
+				{3, 6},
+				{3, 9},
+			},
+		},
+		{
+			"invalid line 1",
+			"CHIP *",
+			[]struct{ line, column int }{
+				{1, 1},
+				{1, 6},
+			},
+		},
+		{
+			"invalid line 2",
+			"CHIP And {\n\t*}",
+			[]struct{ line, column int }{
+				{1, 1},
+				{1, 6},
+				{1, 10},
+				{2, 2},
+			},
+		},
+	}
+
+	for i, test := range tests {
+		// lexer for this test
+		l := lex(test.label, test.input)
+
+		var outputs []token
+		for tok := l.nextToken(); tok.typ != tokenEOF; tok = l.nextToken() {
+			outputs = append(outputs, tok)
+			if tok.typ == tokenError {
+				// no more token will be emitted
+				break
+			}
+		}
+
+		if len(outputs) != len(test.positions) {
+			t.Fatalf("test %v: invalid number of tokens (%v instead of %v)", i, len(outputs), len(test.positions))
+		}
+
+		for j, tok := range outputs {
+			if tok.line != test.positions[j].line {
+				t.Errorf("test %v: wrong line number for token %s (%v instead of %v)", j, tok, tok.line, test.positions[j].line)
+			}
+			if tok.column != test.positions[j].column {
+				t.Errorf("test %v: wrong column number for token %s (%v instead of %v)", j, tok, tok.column, test.positions[j].column)
+			}
+		}
+
 	}
 }
