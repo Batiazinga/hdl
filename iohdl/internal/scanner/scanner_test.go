@@ -161,7 +161,7 @@ func TestScanner(t *testing.T) {
 			testcase.label,
 			func(t *testing.T) {
 				// build lexer for this test
-				s := New("filename", []byte(testcase.src))
+				s := New([]byte(testcase.src))
 
 				// store all tokens in a slice (except EOF)
 				var tokens []token.Token
@@ -242,7 +242,7 @@ func TestPosition(t *testing.T) {
 		t.Run(
 			testcase.label,
 			func(t *testing.T) {
-				s := New("test.hdl", []byte(testcase.src))
+				s := New([]byte(testcase.src))
 
 				// store all positions in a slice (except for EOF)
 				var positions []position

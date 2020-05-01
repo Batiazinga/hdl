@@ -14,8 +14,7 @@ const (
 // Scanner can scan a source text to extract its tokens.
 type Scanner struct {
 	// input file
-	filename string
-	src      []byte
+	src []byte
 
 	// current rune and its width and position
 	// line and column start at zero
@@ -31,10 +30,9 @@ type Scanner struct {
 }
 
 // New returns a ready-to-use scanner.
-func New(file string, src []byte) *Scanner {
+func New(src []byte) *Scanner {
 	s := &Scanner{
-		filename: file,
-		src:      src,
+		src: src,
 	}
 
 	s.next()
@@ -47,9 +45,9 @@ func New(file string, src []byte) *Scanner {
 // The position points to the beginning of the token.
 //
 // All tokens have a literal string except token.EOF.
-func (s *Scanner) Scan() (pos Position, tok token.Token, lit string) {
+func (s *Scanner) Scan() (pos token.Position, tok token.Token, lit string) {
 	s.skipSpace()
-	pos = Position{s.filename, s.tokLine, s.tokCol}
+	pos = token.NewPosition(s.tokLine, s.tokCol)
 
 	switch current := s.current; {
 
@@ -115,7 +113,7 @@ func (s *Scanner) Scan() (pos Position, tok token.Token, lit string) {
 			tok = token.ILLEGAL
 		}
 
-		// move to the position after the token
+		// move to the token. after the token
 		// i.e. position of the next token (or whitespace)
 		s.next()
 
@@ -153,7 +151,7 @@ func (s *Scanner) next() {
 			// input was not empty
 			// so it's an invalid UTF8-encoding (and width is 1)
 			// collect error and continue
-			s.errs = append(s.errs, Error{Position{s.filename, s.line, s.col}})
+			s.errs = append(s.errs, Error{token.NewPosition(s.line, s.col)})
 		}
 	}
 }
