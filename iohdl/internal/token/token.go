@@ -20,8 +20,8 @@ const (
 
 	// Delimiters and separators
 	COMMA      // ,
-	SEMICOL    // ;
-	COLUMN     // :
+	SEMICOLON  // ;
+	COLON      // :
 	LEFTDELIM  // {
 	RIGTDELIM  // }
 	LEFTPAR    // (
@@ -50,8 +50,8 @@ var tokenStrings = [...]string{
 	FALSE:  "false",
 
 	COMMA:      ",",
-	SEMICOL:    ";",
-	COLUMN:     ":",
+	SEMICOLON:  ";",
+	COLON:      ":",
 	LEFTDELIM:  "{",
 	RIGTDELIM:  "}",
 	LEFTPAR:    "(",

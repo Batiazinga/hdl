@@ -33,8 +33,8 @@ func TestScanner(t *testing.T) {
 			",;:{}()[]..=",
 			[]token.Token{
 				token.COMMA,
-				token.SEMICOL,
-				token.COLUMN,
+				token.SEMICOLON,
+				token.COLON,
 				token.LEFTDELIM,
 				token.RIGTDELIM,
 				token.LEFTPAR,

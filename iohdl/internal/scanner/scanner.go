@@ -93,9 +93,9 @@ func (s *Scanner) Scan() (pos Position, tok token.Token, lit string) {
 		case ',':
 			tok = token.COMMA
 		case ';':
-			tok = token.SEMICOL
+			tok = token.SEMICOLON
 		case ':':
-			tok = token.COLUMN
+			tok = token.COLON
 		case '{':
 			tok = token.LEFTDELIM
 		case '}':
