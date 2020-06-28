@@ -3,7 +3,7 @@ package description
 import "github.com/batiazinga/hdl/iohdl/internal/token"
 
 // Chip is the description of a chip
-// with its comments, interface and parts.
+// with its comments, header and body.
 type Chip struct {
 	// sorted by position
 	comments []Comment
@@ -12,14 +12,12 @@ type Chip struct {
 	start, end token.Position
 	name       string
 
-	// interface
-	// sorted by position
-	inputs  []Input
-	outputs []Output
+	// header
+	inputs  InputList
+	outputs OutputList
 
 	// body
-	// sorted by position
-	parts []Part
+	parts PartList
 }
 
 // Start returns the position at which the chip starts.
@@ -47,26 +45,14 @@ func (c Chip) Comment(i int) Comment { return c.comments[i] }
 // Name returns the name of the chip, i.e. the name in the chip declaration.
 func (c Chip) Name() string { return c.name }
 
-// NumInputs returns the number input pins of the chip.
-func (c Chip) NumInputs() int { return len(c.inputs) }
+// Inputs returns the list of input pins.
+func (c Chip) Inputs() InputList { return c.inputs }
 
-// Input returns the i-th input pin.
-// This panics if i is out of bounds.
-func (c Chip) Input(i int) Input { return c.inputs[i] }
+// Outputs returns the list of output pins.
+func (c Chip) Outputs(i int) OutputList { return c.outputs }
 
-// NumOutputs returns the number output pins of the chip.
-func (c Chip) NumOutputs() int { return len(c.outputs) }
-
-// Output returns the i-th output pin.
-// This panics if i is out of bounds.
-func (c Chip) Output(i int) Output { return c.outputs[i] }
-
-// NumParts returns the number parts in the chip.
-func (c Chip) NumParts() int { return len(c.parts) }
-
-// Part returns the i-th part.
-// This panics if i is out of bounds.
-func (c Chip) Part(i int) Part { return c.parts[i] }
+// Parts returns the list of part.
+func (c Chip) Parts() PartList { return c.parts }
 
 // ChipBuilder can build a description of a chip on-the-fly.
 type ChipBuilder struct{}
@@ -79,20 +65,20 @@ func (b *ChipBuilder) AppendComment(comment Comment) {}
 // Declare starts the declaration of the chip and set its name.
 func (b *ChipBuilder) Declare(line int, name string) {}
 
-// AppendInput appends an input.
-// Even if inputs are declared after the chip declaration and before output declarations,
+// DeclareInputs declare the list of inputs.
+// Even if inputs should be declared between the chip and outputs declarations,
 // it can be called at any moment.
-func (b *ChipBuilder) AppendInput(input Input) {}
+func (b *ChipBuilder) DeclareInputs(inputs InputList) {}
 
-// AppendOutput appends an output.
-// Even if outputs are declared after input declarations and before the body of the chip,
+// DeclareOutputs declares the list of outputs.
+// Even if outputs should be declared between the inputs and the body declarationw,
 // it can be called at any moment.
-func (b *ChipBuilder) AppendOutput(output Output) {}
+func (b *ChipBuilder) DeclareOutputs(outputs OutputList) {}
 
-// AppendPart appends a part.
-// Even if the body of the chip is defined after the output declarations,
+// DeclareParts declares the list of parts.
+// Even if the body of the chip should be defined after the outputs declaration,
 // it can be called at any moment.
-func (b *ChipBuilder) AppendPart(part Part) {}
+func (b *ChipBuilder) DeclareParts(part Part) {}
 
 // Build return the chip.
 // The builder is reset so it can reused without any side effect on previously built chips.
